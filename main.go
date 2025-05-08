@@ -11,7 +11,6 @@ import (
 
 	"Locutus/helpers"
 
-	"github.com/joho/godotenv"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
 	"github.com/slack-go/slack/socketmode"
@@ -60,7 +59,7 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 
 	fmt.Println("Request from user", user)
 
-  text := strings.ToLower(event.Text)
+	text := strings.ToLower(event.Text)
 	fmt.Println("****************************************")
 
 	// If the input starts with <, extract the string after the first >
