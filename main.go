@@ -13,11 +13,16 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
-    "github.com/slack-go/slack/socketmode"
+  "github.com/slack-go/slack/socketmode"
 
 	// "github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/ollama"
+
+	"github.com/tmc/langchaingo/chains"
+	"github.com/tmc/langchaingo/prompts"
 )
+
+var conversationMemory = make(map[string][]string)
 
 func HandleEventMessage(event slackevents.EventsAPIEvent, client *slack.Client) error {
 	switch event.Type {
@@ -47,30 +52,90 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 	if err != nil {
 		log.Fatal(err)
 	}
- 
-    user, err := client.GetUserInfo(event.User)
-    if err != nil {
-        return err
-    }
+
+	user, err := client.GetUserInfo(event.User)
+	if err != nil {
+			return fmt.Errorf("failed to get user info: %w", err)
+	}
 
 	fmt.Println("Request from user", user)
- 
-    text := strings.ToLower(event.Text)
+
+  text := strings.ToLower(event.Text)
 	fmt.Println("****************************************")
+
+	// If the input starts with <, extract the string after the first >
+	// Otherwise, extract the string before the first <
 	location := strings.IndexRune(text, '<')
+	formattedText := text
+
 	fmt.Println(text[:location])
-	formattedText := text[:location]
- 
-    attachment := slack.Attachment{}
+
+	if location == 0 {
+    // Text starts with '<', so get everything after the first '>'
+    closeIndex := strings.IndexRune(text, '>')
+    if closeIndex != -1 && closeIndex+1 < len(text) {
+        formattedText = strings.TrimSpace(text[closeIndex+1:])
+    }
+		else {
+        formattedText = ""
+    }
+	} else if location > 0 {
+			// Get everything before the first '<'
+			formattedText = strings.TrimSpace(text[:location])
+	} else {
+			// Fallback if no '<'
+			formattedText = strings.TrimSpace(text)
+	}
+
+	fmt.Println("formattedText is: ", formattedText)
+
+	// Start saving context for user
+	userID := event.User
+	conversationMemory[userID] = append(conversationMemory[userID], fmt.Sprintf("User: %s", formattedText))
+
+	// Set limit to last 10 messages
+	if len(conversationMemory[userID]) > 10 {
+		conversationMemory[userID] = conversationMemory[userID][len(conversationMemory[userID])-10:]
+	}
+
+	// Create the prompt template
+	promptTemplate := prompts.NewPromptTemplate(
+		"Here is a conversation between a helpful assistant and a user:\n\n{{.history}}\nUser: {{.input}}\nBot:",
+		[]string{"history", "input"},
+	)
+
+	// Call the chain with history and input
+	history := strings.Join(conversationMemory[userID][:len(conversationMemory[userID])-1], "\n") // exclude current message
+
+	input := map[string]interface{}{
+		"history": history,
+		"input":   formattedText,
+	}
+
+	// Create a new chain
+	chain := chains.NewLLMChain(llm, promptTemplate)
 
 	ctx := context.Background()
 
-	str, err := llm.Call(ctx, formattedText)
+	response, err := chain.Call(ctx, input)
 	if err != nil {
-		log.Fatal(err)
+		return fmt.Errorf("chain execution failed: %w", err)
 	}
-	attachment.Text = str
-	attachment.Color = "#4af030"
+
+	// The response should be a map. Assuming it contains the result under the key "text"
+	textResponse, ok := response["text"].(string)
+	if !ok {
+		return fmt.Errorf("unexpected response format, expected a string in 'text' field")
+	}
+
+	// Add bot response to memory
+	conversationMemory[userID] = append(conversationMemory[userID], "Bot: "+textResponse)
+
+	// Post to Slack
+	attachment := slack.Attachment{
+		Text:  textResponse,
+		Color: "#4af030",
+	}
 
 	_, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment))
 	if err != nil {
@@ -82,7 +147,7 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 	// 	llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
 			// attachment.Text = string(chunk)
 			// attachment.Color = "#4af030"
-			
+
 			// _, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment))
 			// if err != nil {
 			// 	return fmt.Errorf("failed to post message: %w", err)
@@ -105,9 +170,8 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
     //     attachment.Color = "#4af030"
     // }
 
-    return nil
+  return nil
 }
-
 
 func main() {
 	fmt.Println("You will be assimilated!")
@@ -115,7 +179,7 @@ func main() {
 	godotenv.Load(".env")
 
 	token := os.Getenv("SLACK_AUTH_TOKEN")
-    channelID := os.Getenv("SLACK_CHANNEL_ID")
+  channelID := os.Getenv("SLACK_CHANNEL_ID")
 	appToken := os.Getenv("SLACK_APP_TOKEN")
 
 	fmt.Println("Token:", token)
@@ -127,9 +191,9 @@ func main() {
         socketmode.OptionDebug(true),
         socketmode.OptionLog(log.New(os.Stdout, "socketmode: ", log.Lshortfile|log.LstdFlags)),
     )
- 
+
     ctx, cancel := context.WithCancel(context.Background())
- 
+
     defer cancel()
 
 	go func(ctx context.Context, client *slack.Client, socketClient *socketmode.Client) {
@@ -139,17 +203,17 @@ func main() {
                 log.Println("Shutting down socketmode listener")
                 return
             case event := <-socketClient.Events:
- 
+
                 switch event.Type {
-        
+
                 case socketmode.EventTypeEventsAPI:
- 
+
                     eventsAPI, ok := event.Data.(slackevents.EventsAPIEvent)
                     if !ok {
                         log.Printf("Could not type cast the event to the EventsAPI: %v\n", event)
                         continue
                     }
- 
+
                     socketClient.Ack(*event.Request)
                     err := HandleEventMessage(eventsAPI, client)
 					if err != nil {
@@ -159,6 +223,6 @@ func main() {
             }
         }
     }(ctx, client, socketClient)
- 
+
     socketClient.Run()
 }
