@@ -87,13 +87,18 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 
 	fmt.Println("formattedText is: ", formattedText)
 
-	// Start saving context for user
-	userID := event.User
-	conversationMemory[userID] = append(conversationMemory[userID], fmt.Sprintf("User: %s", formattedText))
+	// Start saving context by thread id
+	threadID := event.ThreadTimeStamp
+	if threadID == "" {
+		threadID = event.TimeStamp
+	}
+
+	// Store conversation context per thread
+	conversationMemory[threadID] = append(conversationMemory[threadID], fmt.Sprintf("User: %s", formattedText))
 
 	// Set limit to last 10 messages
-	if len(conversationMemory[userID]) > 10 {
-		conversationMemory[userID] = conversationMemory[userID][len(conversationMemory[userID])-10:]
+	if len(conversationMemory[threadID]) > 10 {
+		conversationMemory[threadID] = conversationMemory[threadID][len(conversationMemory[threadID])-10:]
 	}
 
 	// Create the prompt template
@@ -103,7 +108,7 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 	)
 
 	// Call the chain with history and input
-	history := strings.Join(conversationMemory[userID][:len(conversationMemory[userID])-1], "\n") // exclude current message
+	history := strings.Join(conversationMemory[threadID][:len(conversationMemory[threadID])-1], "\n") // exclude current message
 
 	input := map[string]interface{}{
 		"history": history,
@@ -127,7 +132,7 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 	}
 
 	// Add bot response to memory
-	conversationMemory[userID] = append(conversationMemory[userID], "Bot: "+textResponse)
+	conversationMemory[threadID] = append(conversationMemory[threadID], "Bot: "+textResponse)
 
 	// Post to Slack
 	attachment := slack.Attachment{
@@ -146,7 +151,7 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 		if err != nil {
 			return fmt.Errorf("failed to post message: %w", err)
 		}
-	}	
+	}
 
   return nil
 }
