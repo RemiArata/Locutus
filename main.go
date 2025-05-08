@@ -4,13 +4,13 @@ package main
 import (
 	"fmt"
 	"os"
-	// "time"
 	"log"
 	"context"
 	"errors"
 	"strings"
 
-	"github.com/joho/godotenv"
+	"Locutus/helpers"
+
 	"github.com/slack-go/slack"
 	"github.com/slack-go/slack/slackevents"
     "github.com/slack-go/slack/socketmode"
@@ -72,38 +72,21 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 	attachment.Text = str
 	attachment.Color = "#4af030"
 
-	_, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment))
-	if err != nil {
-		return fmt.Errorf("failed to post message: %w", err)
-	}
 
-	// _, err = llm.Call(ctx, formattedText,
-	// 	llms.WithTemperature(0.8),
-	// 	llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
-			// attachment.Text = string(chunk)
-			// attachment.Color = "#4af030"
-			
-			// _, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment))
-			// if err != nil {
-			// 	return fmt.Errorf("failed to post message: %w", err)
-			// }
-	// 		return
-	// 	}),
-	// )
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	fmt.Println(event.ThreadTimeStamp)
 
-    // if strings.Contains(text, "hello") || strings.Contains(text, "hi") {
-    //     attachment.Text = fmt.Sprintf("Hello %s", user.Name)
-    //     attachment.Color = "#4af030"
-    // } else if strings.Contains(text, "weather") {
-    //     attachment.Text = fmt.Sprintf("Weather is sunny today. %s", user.Name)
-    //     attachment.Color = "#4af030"
-    // } else {
-    //     attachment.Text = fmt.Sprintf("I am good. How are you %s?", user.Name)
-    //     attachment.Color = "#4af030"
-    // }
+
+	if event.ThreadTimeStamp != "" {
+		_, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment), slack.MsgOptionTS(event.TimeStamp))
+		if err != nil {
+			return fmt.Errorf("failed to post message: %w", err)
+		}
+	} else {
+		_, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment))
+		if err != nil {
+			return fmt.Errorf("failed to post message: %w", err)
+		}
+	}	
 
     return nil
 }
@@ -112,14 +95,18 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 func main() {
 	fmt.Println("You will be assimilated!")
 
-	godotenv.Load(".env")
+	var token string
+	// var channelId string
+	var appToken string
 
-	token := os.Getenv("SLACK_AUTH_TOKEN")
-    channelID := os.Getenv("SLACK_CHANNEL_ID")
-	appToken := os.Getenv("SLACK_APP_TOKEN")
+	if helpers.CheckEnvExists() {
+		// token, channelID, appToken = helpers.LoadEnvVariables()
+		token, appToken = helpers.LoadEnvVariables()
+	} else {
+		fmt.Println(".ENV does not exist. Please add and try again :).")
+		os.Exit(1)
+	}
 
-	fmt.Println("Token:", token)
-	fmt.Println("Channel ID:", channelID)
 	client := slack.New(token, slack.OptionDebug(true), slack.OptionAppLevelToken(appToken))
 
 	socketClient := socketmode.New(
