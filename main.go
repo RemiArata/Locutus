@@ -68,13 +68,13 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 	// fmt.Println(text[:location])
 
 	if location == 0 {
-    // Text starts with '<', so get everything after the first '>'
-    closeIndex := strings.IndexRune(text, '>')
-    if closeIndex != -1 && closeIndex+1 < len(text) {
-        formattedText = strings.TrimSpace(text[closeIndex+1:])
-    } else {
-        formattedText = ""
-    }
+	// Text starts with '<', so get everything after the first '>'
+	closeIndex := strings.IndexRune(text, '>')
+	if closeIndex != -1 && closeIndex+1 < len(text) {
+		formattedText = strings.TrimSpace(text[closeIndex+1:])
+	} else {
+		formattedText = ""
+	}
 	} else if location > 0 {
 		// Get everything before the first '<'
 		formattedText = strings.TrimSpace(text[:location])
@@ -138,19 +138,6 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 		Text:  textResponse,
 		Color: "#4af030",
 	}
-
-
-	// if event.ThreadTimeStamp != "" {
-		// _, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment), slack.MsgOptionTS(event.TimeStamp))
-		// if err != nil {
-		// 	return fmt.Errorf("failed to post message: %w", err)
-		// }
-	// } else {
-	// 	_, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment))
-	// 	if err != nil {
-	// 		return fmt.Errorf("failed to post message: %w", err)
-	// 	}
-	// }
 	_, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment), slack.MsgOptionTS(event.TimeStamp))
 	if err != nil {
 		return fmt.Errorf("failed to post message: %w", err)

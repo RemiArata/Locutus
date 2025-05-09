@@ -1,3 +1,8 @@
+# v0.0.2
+
+- Updated formatting
+- Removed commented out code
+
 # v0.0.1
 
 - initial versioned commit
