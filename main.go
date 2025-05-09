@@ -27,8 +27,6 @@ func HandleEventMessage(event slackevents.EventsAPIEvent, client *slack.Client) 
 	switch event.Type {
 	// First we check if this is an CallbackEvent
 	case slackevents.CallbackEvent:
-
-
 		innerEvent := event.InnerEvent
 		// Yet Another Type switch on the actual Data to see if its an AppMentionEvent
 		switch ev := innerEvent.Data.(type) {
@@ -47,27 +45,27 @@ func HandleEventMessage(event slackevents.EventsAPIEvent, client *slack.Client) 
 
 func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slack.Client) error {
 
-	llm, err := ollama.New(ollama.WithModel("granite3-dense"))
+	llm, err := ollama.New(ollama.WithModel("granite3-dense")) // Add model you wish to run here
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	user, err := client.GetUserInfo(event.User)
 	if err != nil {
-			return fmt.Errorf("failed to get user info: %w", err)
+		return fmt.Errorf("failed to get user info: %w", err)
 	}
 
-	fmt.Println("Request from user", user)
+	
 
+	// Parsing the input: ----------------------------------------------
 	text := strings.ToLower(event.Text)
-	fmt.Println("****************************************")
 
 	// If the input starts with <, extract the string after the first >
 	// Otherwise, extract the string before the first <
 	location := strings.IndexRune(text, '<')
 	formattedText := text
 
-	fmt.Println(text[:location])
+	// fmt.Println(text[:location])
 
 	if location == 0 {
     // Text starts with '<', so get everything after the first '>'
@@ -78,14 +76,15 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
         formattedText = ""
     }
 	} else if location > 0 {
-			// Get everything before the first '<'
-			formattedText = strings.TrimSpace(text[:location])
+		// Get everything before the first '<'
+		formattedText = strings.TrimSpace(text[:location])
 	} else {
-			// Fallback if no '<'
-			formattedText = strings.TrimSpace(text)
+		// Fallback if no '<'
+		formattedText = strings.TrimSpace(text)
 	}
 
-	fmt.Println("formattedText is: ", formattedText)
+	fmt.Println("User:", user, "\nrequested", formattedText)
+	// -------------------------------------------------------------------------------------
 
 	// Start saving context by thread id
 	threadID := event.ThreadTimeStamp
@@ -141,27 +140,28 @@ func HandleAppMentionEventToBot(event *slackevents.AppMentionEvent, client *slac
 	}
 
 
-	if event.ThreadTimeStamp != "" {
-		_, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment), slack.MsgOptionTS(event.TimeStamp))
-		if err != nil {
-			return fmt.Errorf("failed to post message: %w", err)
-		}
-	} else {
-		_, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment))
-		if err != nil {
-			return fmt.Errorf("failed to post message: %w", err)
-		}
+	// if event.ThreadTimeStamp != "" {
+		// _, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment), slack.MsgOptionTS(event.TimeStamp))
+		// if err != nil {
+		// 	return fmt.Errorf("failed to post message: %w", err)
+		// }
+	// } else {
+	// 	_, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment))
+	// 	if err != nil {
+	// 		return fmt.Errorf("failed to post message: %w", err)
+	// 	}
+	// }
+	_, _, err = client.PostMessage(event.Channel, slack.MsgOptionAttachments(attachment), slack.MsgOptionTS(event.TimeStamp))
+	if err != nil {
+		return fmt.Errorf("failed to post message: %w", err)
 	}
 
-  return nil
+	return nil
 }
 
 func main() {
-	fmt.Println("You will be assimilated!")
-
 	var token string
 	var appToken string
-
 
 	if helpers.CheckEnvExists() {
 		token, appToken = helpers.LoadEnvVariables()
@@ -188,17 +188,13 @@ func main() {
                 log.Println("Shutting down socketmode listener")
                 return
             case event := <-socketClient.Events:
-
                 switch event.Type {
-
                 case socketmode.EventTypeEventsAPI:
-
                     eventsAPI, ok := event.Data.(slackevents.EventsAPIEvent)
                     if !ok {
                         log.Printf("Could not type cast the event to the EventsAPI: %v\n", event)
                         continue
                     }
-
                     socketClient.Ack(*event.Request)
                     err := HandleEventMessage(eventsAPI, client)
 					if err != nil {
