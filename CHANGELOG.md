@@ -1,5 +1,9 @@
 # v0.0.2
 
+- removed `.env` from history
+
+# v0.0.2
+
 - Updated formatting
 - Removed commented out code
 
